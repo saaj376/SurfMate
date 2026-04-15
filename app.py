@@ -59,6 +59,34 @@ def api_users():
     return jsonify(USERS)
 
 
+import asyncio
+import agent
+
+def run_agent_in_thread(task_text):
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(agent.execute_task(task_text))
+    finally:
+        loop.close()
+
+@app.route("/api/agent", methods=["POST"])
+def api_agent():
+    if not is_logged_in():
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    data = request.get_json()
+    task = data.get("task", "")
+    if not task:
+        return jsonify({"error": "No task provided"}), 400
+        
+    try:
+        result = run_agent_in_thread(task)
+        return jsonify({"result": result})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/dashboard/reset/<int:user_id>", methods=["POST"])
 def reset_password(user_id):
     if not is_logged_in():

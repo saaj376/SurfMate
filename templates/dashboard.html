@@ -156,14 +156,25 @@
       <form class="form-grid" method="post" action="http://127.0.0.1:5000/dashboard/add">
         <div>
           <label for="name">Name</label>
-          <input id="name" name="name" required>
+          <input id="name" name="name" type="text" placeholder="Name" required>
         </div>
         <div>
           <label for="email">Email</label>
-          <input id="email" name="email" type="email" required>
+          <input id="email" name="email" type="email" placeholder="Email" required>
         </div>
         <button class="small danger" type="submit">Create User</button>
       </form>
+    </div>
+    <div class="panel" id="agent-chat" style="margin-top: 20px;">
+      <h2 style="margin-top: 0;">AI Agent Assistant</h2>
+      <p class="muted" style="margin-bottom: 16px;">Type a task for the AI to perform on this dashboard automatically.</p>
+      <form id="agent-form" class="form-grid" onsubmit="submitAgentTask(event)" style="grid-template-columns: 1fr auto;">
+        <div>
+          <input id="agent-task" type="text" placeholder="e.g. Create a user named Bob with email bob@test.com" required>
+        </div>
+        <button id="agent-btn" class="button primary" type="submit">Run Task</button>
+      </form>
+      <pre id="agent-output" style="margin-top: 16px; padding: 12px; background: #1e293b; color: #f8fafc; border-radius: 8px; font-size: 13px; display: none; white-space: pre-wrap; font-family: monospace;"></pre>
     </div>
   </div>
   <script>
@@ -215,6 +226,45 @@
       .then((response) => response.ok ? response.json() : Promise.reject())
       .then(renderUsers)
       .catch(() => renderUsers(fallbackUsers));
+
+    async function submitAgentTask(event) {
+      event.preventDefault();
+      const input = document.getElementById("agent-task");
+      const btn = document.getElementById("agent-btn");
+      const output = document.getElementById("agent-output");
+      
+      const task = input.value.trim();
+      if (!task) return;
+      
+      input.disabled = true;
+      btn.disabled = true;
+      btn.textContent = "Running...";
+      output.style.display = "block";
+      output.textContent = "Agent is launching a background browser and communicating with LLM...\nThis usually takes 20-30 seconds.";
+      
+      try {
+        const response = await fetch("http://127.0.0.1:5000/api/agent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task: task })
+        });
+        
+        const data = await response.json();
+        if (response.ok) {
+          output.textContent += "\n\nAgent Result:\n" + data.result;
+          setTimeout(() => window.location.reload(), 3000);
+        } else {
+          output.textContent += "\n\nError: " + data.error;
+        }
+      } catch (err) {
+        output.textContent += "\n\nRequest Failed: " + err.message;
+      } finally {
+        input.disabled = false;
+        btn.disabled = false;
+        btn.textContent = "Run Task";
+        input.value = "";
+      }
+    }
   </script>
 </body>
 </html>
