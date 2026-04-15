@@ -51,19 +51,18 @@ async def execute_task(task_text: str) -> str:
     browser = Browser()
 
     try:
-        print(f"[agent] Executing Task context: '{task_text}'")
+        print(f"[agent] Booting agent sequence with task: '{task_text}'")
         
         full_task = (
+            "You are an autonomous administrative agent.\n"
             f"Step 1: Go to {APP_URL}/login.\n"
             "Step 2: Log in with username 'admin' and password 'password123'.\n"
             "Step 3: Wait for the dashboard to load.\n"
-            f"Step 4: Execute the following core task: '{task_text}'\n\n"
+            f"Step 4: Execute the user's requested core task: '{task_text}'\n\n"
             "CRITICAL INSTRUCTIONS:\n"
             "- Use your vision capabilities to locate elements directly on the screen.\n"
-            "- Find and click the necessary buttons (e.g., 'Add User' or 'Create Ticket').\n"
-            "- Fill out any required form fields accurately.\n"
-            "- IMPORTANT: Once you submit the form, verify that you see a success message (e.g., 'User Added' or 'Ticket Created') on the screen before calling done.\n"
-            "- If you encounter an error, note it in your done output."
+            "- Find and click the necessary buttons.\n"
+            "- Verify that the action was successful by watching for success messages before calling done.\n"
         )
         
         history = await run_task(browser, llm, full_task)
@@ -80,7 +79,6 @@ async def main() -> None:
         "task",
         type=str,
         nargs="?",
-        default="Create a new user for Saajan with email saajan@example.com",
         help="Natural language instruction for the agent."
     )
     args = parser.parse_args()
