@@ -46,19 +46,47 @@ async def run_task(browser: Browser, llm: ChatLiteLLM, task: str):
     return history
 
 
-async def execute_task(task_text: str) -> str:
+async def execute_task_persistent(browser: Browser, task_text: str) -> str:
+    print("\n[agent] ----------------------------------------------------", flush=True)
+    print(f"[agent] Received task from queue: '{task_text}'", flush=True)
+    print("[agent] Connecting to LLM...", flush=True)
     llm = build_llm()
-    browser = Browser()
-
     try:
-        print(f"[agent] Booting agent sequence with task: '{task_text}'")
+        print("[agent] Booting persistent sequence...", flush=True)
         
         full_task = (
             "You are an autonomous administrative agent.\n"
-            f"Step 1: Go to {APP_URL}/login.\n"
-            "Step 2: Log in with username 'admin' and password 'password123'.\n"
-            "Step 3: Wait for the dashboard to load.\n"
-            f"Step 4: Execute the user's requested core task: '{task_text}'\n\n"
+            f"If you are not currently on the dashboard, go to {APP_URL}/bypass to automatically access the dashboard.\n"
+            "If you are already on the dashboard, DO NOT navigate or log in again. Just execute the task directly from where you are.\n"
+            f"Execute the user's requested core task: '{task_text}'\n\n"
+            "CRITICAL INSTRUCTIONS:\n"
+            "- Use your vision capabilities to locate elements directly on the screen.\n"
+            "- Find and click the necessary buttons.\n"
+            "- Verify that the action was successful by watching for success messages before calling done.\n"
+        )
+        
+        history = await run_task(browser, llm, full_task)
+        if history and history.history and history.history[-1].result:
+            return history.history[-1].result[-1].extracted_content or "Done."
+        return "Task completed without return."
+    except Exception as e:
+        print(f"Error in execute_task_persistent: {e}")
+        return f"Error: {e}"
+
+async def execute_task(task_text: str) -> str:
+    print("[agent] Connecting to LLM...", flush=True)
+    llm = build_llm()
+    print("[agent] Launching headless browser engine (this may take up to 10 seconds)...", flush=True)
+    browser = Browser()
+    print(f"[agent] Browser launched. Booting agent sequence with task: '{task_text}'", flush=True)
+
+    try:
+        
+        full_task = (
+            "You are an autonomous administrative agent.\n"
+            f"Step 1: Go to {APP_URL}/bypass to automatically bypass login and access the dashboard.\n"
+            "Step 2: Wait for the dashboard to load.\n"
+            f"Step 3: Execute the user's requested core task: '{task_text}'\n\n"
             "CRITICAL INSTRUCTIONS:\n"
             "- Use your vision capabilities to locate elements directly on the screen.\n"
             "- Find and click the necessary buttons.\n"
@@ -82,6 +110,9 @@ async def main() -> None:
         help="Natural language instruction for the agent."
     )
     args = parser.parse_args()
+    if not args.task:
+        print("Please provide a task. Example: python agent.py \"Create a user named Bob\"")
+        return
     await execute_task(args.task)
 
 

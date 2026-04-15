@@ -28,6 +28,11 @@ def is_logged_in():
 def index():
     return redirect(url_for("dashboard") if is_logged_in() else url_for("login"))
 
+@app.route("/bypass")
+def bypass():
+    session["logged_in"] = True
+    return redirect(url_for("dashboard"))
+
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -60,15 +65,45 @@ def api_users():
 
 
 import asyncio
+import threading
+import queue
 import agent
 
-def run_agent_in_thread(task_text):
+task_queue = queue.Queue()
+result_queue = queue.Queue()
+
+def agent_worker_thread():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
+    from browser_use import Browser
+    
+    _browser = Browser()
+    
+    async def run_worker():
+        while True:
+            item = task_queue.get()
+            if item is None:
+                break
+            try:
+                res = await agent.execute_task_persistent(_browser, item)
+                result_queue.put({"status": "success", "result": res})
+            except Exception as e:
+                result_queue.put({"status": "error", "error": str(e)})
+            task_queue.task_done()
+    
     try:
-        return loop.run_until_complete(agent.execute_task(task_text))
-    finally:
-        loop.close()
+        loop.run_until_complete(run_worker())
+    except Exception as e:
+        print("Agent thread error:", e)
+
+threading.Thread(target=agent_worker_thread, daemon=True).start()
+
+def run_agent_in_thread(task_text):
+    task_queue.put(task_text)
+    res = result_queue.get()
+    if res["status"] == "error":
+        raise Exception(res["error"])
+    return res["result"]
 
 @app.route("/api/agent", methods=["POST"])
 def api_agent():
