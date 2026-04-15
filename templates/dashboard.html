@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Dashboard</title>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --green: #047857;
+      --green-bg: #ecfdf5;
+      --border: #dbe4f0;
+      --danger: #b91c1c;
+      --danger-bg: #fef2f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(135deg, #eef4ff, #f8fbff 55%, #eef2f7);
+      color: var(--text);
+    }
+    .wrap {
+      width: min(1100px, calc(100vw - 32px));
+      margin: 32px auto;
+    }
+    .topbar, .panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(15, 23, 42, 0.06);
+    }
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 28px; }
+    .muted { color: var(--muted); margin: 6px 0 0; }
+    .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .button {
+      border: 1px solid var(--border);
+      background: white;
+      color: var(--text);
+      padding: 11px 15px;
+      border-radius: 10px;
+      text-decoration: none;
+      font-weight: 700;
+    }
+    .button.primary { background: var(--accent); color: white; border-color: var(--accent); }
+    .button.primary:hover { background: var(--accent-dark); }
+    .panel { padding: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 14px 12px; border-bottom: 1px solid var(--border); }
+    th { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    .row-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .small {
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    .success { background: var(--green-bg); color: var(--green); border: 1px solid #a7f3d0; }
+    .danger { background: var(--danger-bg); color: var(--danger); border: 1px solid #fecaca; }
+    .message {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #a7f3d0;
+      background: var(--green-bg);
+      color: var(--green);
+    }
+    .error {
+      margin-bottom: 16px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #fecaca;
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+      font-weight: 700;
+    }
+    input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 15px;
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+    @media (max-width: 720px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .form-grid { grid-template-columns: 1fr; }
+      table, thead, tbody, th, td, tr { display: block; }
+      thead { display: none; }
+      tr { border-bottom: 1px solid var(--border); padding: 10px 0; }
+      td { border: 0; padding: 8px 0; }
+      td::before { content: attr(data-label) ": "; font-weight: 700; color: var(--muted); }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="topbar">
+      <div>
+        <h1>Admin Dashboard</h1>
+        <p class="muted">Manage users, reset passwords, and add new accounts.</p>
+      </div>
+      <div class="actions">
+        <a class="button" href="http://127.0.0.1:5000/logout">Log Out</a>
+        <a class="button primary" href="#add-user">Add User</a>
+      </div>
+    </div>
+
+    <div id="message-box" class="message" hidden></div>
+    <div id="error-box" class="error" hidden></div>
+
+    <div class="panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody">
+        </tbody>
+      </table>
+    </div>
+
+    <div class="panel" id="add-user" style="margin-top: 20px;">
+      <h2 style="margin-top: 0;">Add User</h2>
+      <form class="form-grid" method="post" action="http://127.0.0.1:5000/dashboard/add">
+        <div>
+          <label for="name">Name</label>
+          <input id="name" name="name" required>
+        </div>
+        <div>
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required>
+        </div>
+        <button class="small danger" type="submit">Create User</button>
+      </form>
+    </div>
+  </div>
+  <script>
+    const fallbackUsers = [
+      { id: 1, name: "Alice Johnson", email: "alice@example.com" },
+      { id: 2, name: "Brian Smith", email: "brian@example.com" },
+      { id: 3, name: "Carla Gomez", email: "carla@example.com" },
+    ];
+
+    function showFlash() {
+      const params = new URLSearchParams(window.location.search);
+      const message = params.get("message");
+      const error = params.get("error");
+      if (message) {
+        const box = document.getElementById("message-box");
+        box.textContent = message;
+        box.hidden = false;
+      }
+      if (error) {
+        const box = document.getElementById("error-box");
+        box.textContent = error;
+        box.hidden = false;
+      }
+    }
+
+    function renderUsers(users) {
+      const tbody = document.getElementById("users-tbody");
+      tbody.innerHTML = "";
+      for (const user of users) {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td data-label="Name">${user.name}</td>
+          <td data-label="Email">${user.email}</td>
+          <td data-label="Actions">
+            <div class="row-actions">
+              <form method="post" action="http://127.0.0.1:5000/dashboard/reset/${user.id}">
+                <button class="small success" type="submit">Reset Password</button>
+              </form>
+            </div>
+          </td>
+        `;
+        tbody.appendChild(row);
+      }
+    }
+
+    showFlash();
+
+    fetch("http://127.0.0.1:5000/api/users")
+      .then((response) => response.ok ? response.json() : Promise.reject())
+      .then(renderUsers)
+      .catch(() => renderUsers(fallbackUsers));
+  </script>
+</body>
+</html>
