@@ -1,45 +1,116 @@
 # SurfMate
 
-SurfMate is a Flask-based IT admin dashboard demo with an integrated browser automation agent.
-It combines a small web app for user management with an AI assistant that can execute dashboard tasks through a real browser.
+SurfMate is an **agentic AI browser automation** project: a Gemini-powered agent that watches a live web page, reasons about its visual layout, and performs complex multi-step tasks entirely on its own — clicking buttons, filling forms, and verifying results — all without any scripted selectors or hardcoded flows.
 
-## Features
+The project ships a small Flask web app as the automation target (a user-management admin panel), but the real core is the agent itself: a persistent, vision-capable browser AI that receives natural-language instructions and executes them end-to-end.
 
-- Admin login and session-based authentication
-- User table view powered by `/api/users`
-- Add user and reset password flows from the dashboard UI
-- AI Agent Assistant panel that accepts natural-language tasks
-- Persistent browser worker thread for agent task execution
-- CORS headers enabled for API accessibility
+---
+
+## What Makes SurfMate Interesting
+
+### Vision-first web understanding
+
+Unlike traditional test automation or RPA tools that depend on CSS selectors or XPath, SurfMate's agent uses **`use_vision=True`** to perceive the page as a rendered screenshot. It locates UI elements the same way a human would — by looking at them. This means:
+
+- No brittle element locators to maintain
+- Works on any page the agent can visually parse
+- Handles dynamic DOM changes gracefully
+
+### Persistent browser + async task queue
+
+The agent doesn't spin up a new browser per request. `app.py` launches a **persistent background `Browser` instance** in a daemon thread when the server starts. Incoming tasks are fed through an `asyncio` queue:
+
+```
+HTTP POST /api/agent
+       │
+       ▼
+  task_queue (Python Queue)
+       │
+       ▼
+  agent_worker_thread  ──►  execute_task_persistent(browser, task)
+                                       │
+                                       ▼
+                               Browser-Use Agent
+                              (Gemini 2.5 Flash + Vision)
+                                       │
+                                       ▼
+                             result_queue  ──►  JSON response
+```
+
+This architecture keeps browser startup cost to **once per server lifetime**, making agent responses significantly faster after the first request.
+
+### Natural-language task interface
+
+You talk to the agent in plain English. It handles the rest:
+
+```
+"Create a user named Bob with email bob@test.com"
+"Reset the password for Alice Johnson"
+"Add a new user called Dana with email dana@corp.io"
+```
+
+The agent:
+1. Navigates to the correct page if needed
+2. Visually identifies the relevant form or button
+3. Fills in fields or clicks actions
+4. Waits for and reads success/error feedback
+5. Returns a human-readable result summary
+
+### Standalone CLI mode
+
+`agent.py` can also be run directly from the command line, completely independently of the Flask app:
+
+```bash
+python agent.py "Create a user named Bob"
+```
+
+In CLI mode the agent boots its own browser, executes the task, then shuts down cleanly.
+
+---
 
 ## Project Structure
 
 ```text
 SurfMate/
-├── app.py                  # Flask web app, routes, background agent thread
-├── agent.py                # Browser-Use + LLM task execution logic
-├── update.py               # Helper script that injects /bypass route into app.py
+├── agent.py                # Core AI agent: LLM setup, browser task execution, CLI entry point
+├── app.py                  # Flask server: routes, background agent thread, task/result queues
+├── update.py               # One-time helper to inject /bypass route into app.py
 ├── requirements.txt        # Python dependencies
 ├── templates/
-│   ├── login.html          # Login page template
-│   └── dashboard.html      # Dashboard + agent UI template
+│   ├── dashboard.html      # Automation target — user table, add/reset forms, agent chat panel
+│   └── login.html          # Login page (also an automation target)
 └── README.md
 ```
 
+### Key files
+
+| File | Role |
+|---|---|
+| `agent.py` | Houses all LLM and browser logic. `execute_task_persistent()` is called by the server; `execute_task()` is used by the CLI. Both build a Gemini LLM via LiteLLM and hand it to a `browser-use` `Agent`. |
+| `app.py` | Flask app + agent orchestration. Starts the background worker thread, exposes `POST /api/agent`, and keeps the persistent `Browser` alive. |
+| `dashboard.html` | The demo automation target. Renders user data, exposes "Add User" and "Reset Password" actions, and includes a built-in Agent Assistant chat panel that calls `/api/agent`. |
+
+---
+
 ## Tech Stack
 
-- Python 3
-- Flask
-- browser-use
-- litellm + langchain-ollama integration package
-- Gemini API (via `GOOGLE_API_KEY` / `GEMINI_API_KEY`)
+| Layer | Technology |
+|---|---|
+| AI model | Google Gemini 2.5 Flash (`gemini/gemini-2.5-flash`) |
+| LLM client | [LiteLLM](https://github.com/BerriAI/litellm) via `langchain-ollama` integration |
+| Browser automation | [browser-use](https://github.com/browser-use/browser-use) |
+| Vision | `use_vision=True` — agent reasons over page screenshots |
+| Web server | Flask |
+
+---
 
 ## Prerequisites
 
 - Python 3.10+
-- pip
-- A valid Google Gemini API key
-- Environment capable of running a browser for `browser-use`
+- A valid **Google Gemini API key** (`GOOGLE_API_KEY` or `GEMINI_API_KEY`)
+- An environment that can run a Chromium-based browser (headful or headless)
+
+---
 
 ## Installation
 
@@ -54,13 +125,8 @@ SurfMate/
 
    ```bash
    python -m venv .venv
-   source .venv/bin/activate
-   ```
-
-   On Windows (PowerShell):
-
-   ```powershell
-   .venv\Scripts\Activate.ps1
+   source .venv/bin/activate       # macOS / Linux
+   .venv\Scripts\Activate.ps1      # Windows PowerShell
    ```
 
 3. Install dependencies:
@@ -69,135 +135,184 @@ SurfMate/
    pip install -r requirements.txt
    ```
 
-4. Create a `.env` file in the project root:
+4. Create a `.env` file in the project root with your API key:
 
    ```env
    GOOGLE_API_KEY=your_actual_key
    ```
 
-   > `agent.py` accepts `GOOGLE_API_KEY` or `GEMINI_API_KEY` and sets `GEMINI_API_KEY` internally for LiteLLM.
+   > `agent.py` accepts either `GOOGLE_API_KEY` or `GEMINI_API_KEY` and normalises to `GEMINI_API_KEY` internally for LiteLLM.
 
-## Running the App
+---
 
-Start the Flask app:
+## Running
+
+### Server mode (agent + web app together)
 
 ```bash
 python app.py
 ```
 
-By default, the app runs at:
+The Flask app starts at `http://127.0.0.1:5000` and the background browser worker boots immediately.
 
-- `http://127.0.0.1:5000`
+Log in with the demo credentials (`admin` / `password123`) or navigate directly to `/bypass` to skip login and reach the dashboard.
 
-## Login
+The **Agent Assistant** panel on the dashboard lets you type natural-language tasks and see the agent's output in real time.
 
-Use the built-in demo credentials:
+### CLI mode (agent only, no Flask)
 
-- **Username:** `admin`
-- **Password:** `password123`
+Run the agent standalone against the already-running Flask app:
 
-You can also bypass login directly (demo route):
+```bash
+python agent.py "Reset the password for Brian Smith"
+```
 
-- `http://127.0.0.1:5000/bypass`
+The CLI agent boots its own browser, navigates to the app, executes the task, prints the result, and exits.
 
-## Dashboard Capabilities
+---
 
-After login, `/dashboard` provides:
+## How the Agent Works (Deep Dive)
 
-- **User listing** (fetched from `/api/users`)
-- **Reset Password** per user (simulated success message)
-- **Add User** form (`/dashboard/add`)
-- **Agent Assistant** form that sends tasks to `/api/agent`
+### LLM setup — `build_llm()`
 
-## Agent Overview
+```python
+ChatLiteLLM(model="gemini/gemini-2.5-flash", temperature=0.0)
+```
 
-The AI agent pipeline is split across `app.py` and `agent.py`:
+Temperature is set to **0.0** for deterministic, reliable task execution. The Gemini model is accessed through LiteLLM's unified interface, keeping the agent backend-agnostic.
 
-1. `app.py` starts a daemon worker thread.
-2. The worker owns a persistent `Browser` instance.
-3. Requests to `POST /api/agent` enqueue a task.
-4. The worker calls `agent.execute_task_persistent(...)`.
-5. The agent uses Gemini through LiteLLM and performs browser actions with vision enabled (`use_vision=True`).
-6. The final extracted result is returned as JSON.
+### Vision-enabled Agent — `run_task()`
 
-### Example Agent Request
+```python
+Agent(task=task, llm=llm, browser=browser, use_vision=True)
+```
+
+`use_vision=True` tells `browser-use` to capture screenshots at each reasoning step and pass them to the LLM. The model sees the page layout, text, buttons, and form fields visually and decides what action to take next.
+
+### Persistent execution — `execute_task_persistent()`
+
+Used by the Flask background worker. The `Browser` object is created **once** at server startup and reused across all tasks. The agent's system prompt instructs it to:
+
+- Navigate to `/bypass` only if it is not already on the dashboard
+- Execute the user's task directly from the current page state if already there
+- Confirm success via visible feedback before marking itself done
+
+### One-shot execution — `execute_task()`
+
+Used by the CLI. Creates a fresh `Browser`, runs the task end-to-end, and cleanly calls `browser.stop()` in a `finally` block.
+
+### System prompt structure
+
+Both execution modes build the same structured prompt:
+
+```
+You are an autonomous administrative agent.
+[Navigation instruction based on current state]
+Execute the user's requested core task: '{task_text}'
+
+CRITICAL INSTRUCTIONS:
+- Use your vision capabilities to locate elements directly on the screen.
+- Find and click the necessary buttons.
+- Verify that the action was successful by watching for success messages before calling done.
+```
+
+---
+
+## Agent API
+
+### `POST /api/agent`
+
+Authenticated endpoint (requires active session) that enqueues a task for the background browser agent.
+
+**Request:**
+
+```json
+{ "task": "Create a user named Dana with email dana@corp.io" }
+```
+
+**Response (success):**
+
+```json
+{ "result": "User Dana was successfully added to the list." }
+```
+
+**Response (error):**
+
+```json
+{ "error": "Missing GOOGLE_API_KEY. Add it to the .env file: ..." }
+```
+
+**Example with curl** (requires an active session cookie):
 
 ```bash
 curl -X POST http://127.0.0.1:5000/api/agent \
   -H "Content-Type: application/json" \
+  -b "session=<your-session-cookie>" \
   -d '{"task":"Create a user named Bob with email bob@test.com"}'
 ```
 
-## API Endpoints
+> Tip: Use the Agent Assistant panel in the dashboard UI to avoid managing session cookies manually.
 
-### `GET /`
-Redirects to `/dashboard` if logged in, otherwise `/login`.
+---
 
-### `GET /login`
-Renders login page.
+## The Demo App (Automation Target)
 
-### `POST /login`
-Validates credentials and sets session.
+The Flask app exists to give the agent a realistic, interactive target:
 
-### `GET /logout`
-Clears session and redirects to login.
+| Route | Description |
+|---|---|
+| `GET /` | Redirects to dashboard or login |
+| `GET /login` | Login page |
+| `POST /login` | Validates `admin` / `password123` |
+| `GET /logout` | Clears session |
+| `GET /dashboard` | Main dashboard (user table + agent panel) |
+| `GET /bypass` | Skips login — used by agent to reach dashboard directly |
+| `GET /api/users` | Returns current user list as JSON |
+| `POST /dashboard/add` | Adds a user (`name`, `email` form fields) |
+| `POST /dashboard/reset/<id>` | Simulates password reset |
+| `POST /api/agent` | Enqueues a task for the AI agent |
 
-### `GET /dashboard`
-Renders dashboard (requires login).
-
-### `POST /dashboard/add`
-Adds a user from form data (`name`, `email`).
-
-### `POST /dashboard/reset/<user_id>`
-Simulates password reset and returns success/error flash message.
-
-### `GET /api/users`
-Returns current in-memory user list as JSON.
-
-### `POST /api/agent`
-Runs agent task (requires login), expects:
-
-```json
-{ "task": "..." }
-```
-
-Returns:
-
-```json
-{ "result": "..." }
-```
-
-or an error payload.
-
-## Notes & Limitations
-
-- User data is stored in memory (resets on app restart).
-- `app.secret_key` is hardcoded for local/demo usage.
-- Login credentials are hardcoded.
-- `/bypass` route intentionally skips auth for convenience/testing.
-- Agent response time depends on browser startup/LLM latency.
+---
 
 ## Troubleshooting
 
-### `Missing GOOGLE_API_KEY`
-Set `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) in `.env`.
+### `RuntimeError: Missing GOOGLE_API_KEY`
 
-### Agent requests return errors
-Check:
+Add your Gemini API key to `.env`:
 
-- API key validity
-- Browser runtime availability
-- Network access for model calls
-- Flask console logs for stack traces
+```env
+GOOGLE_API_KEY=your_actual_key
+```
 
-### Port already in use
-Run on another port by updating `app.run(...)` in `app.py`.
+### Agent is slow on first request
+
+The browser launches at server startup, but the first LLM call and page navigation can take 20–30 seconds. Subsequent requests reuse the persistent browser and are faster.
+
+### Agent returns an error result
+
+Check the Flask console for stack traces. Common causes:
+
+- Invalid or expired API key
+- No browser runtime available in the environment
+- Network access blocked for Gemini API calls
+
+### Port conflict
+
+Change the port in the final line of `app.py`:
+
+```python
+app.run(debug=True, port=5001)
+```
+
+---
 
 ## Development Tips
 
-- Use `python -m compileall app.py agent.py update.py` for quick syntax checks.
-- Keep the Flask app running while testing `/api/agent` from the dashboard or `curl`.
-- Update templates in `templates/` to modify the UI.
+- Test agent logic directly: `python agent.py "your task here"`
+- Quick syntax check: `python -m compileall app.py agent.py update.py`
+- The agent's vision capabilities mean you can change dashboard HTML freely — no selectors to update in the agent code
+
+---
 
 ## License
 
