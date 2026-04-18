@@ -1,6 +1,6 @@
 # SurfMate
 
-SurfMate is an **agentic AI browser automation** project: a Gemini-powered agent that watches a live web page, reasons about its visual layout, and performs complex multi-step tasks entirely on its own — clicking buttons, filling forms, and verifying results — all without any scripted selectors or hardcoded flows.
+SurfMate is an **agentic AI browser automation** : a Gemini-powered agent that watches a live web page, reasons about its visual layout, and performs complex multi-step tasks entirely on its own — clicking buttons, filling forms, and verifying results — all without any scripted selectors or hardcoded flows.
 
 The project ships a small Flask web app as the automation target (a user-management admin panel), but the real core is the agent itself: a persistent, vision-capable browser AI that receives natural-language instructions and executes them end-to-end.
 
